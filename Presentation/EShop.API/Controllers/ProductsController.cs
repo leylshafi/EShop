@@ -1,5 +1,7 @@
-﻿using EShop.Application.Features.Commands.GetProductById;
+﻿
 using EShop.Application.Features.Commands.UpdateProduct;
+using EShop.Application.Features.Queries.Products.GetAllProducts;
+using EShop.Application.Features.Queries.Products.GetProductById;
 using EShop.Application.Paginations;
 using EShop.Application.Repositories.ProductRepository;
 using EShop.Application.ViewModels;
@@ -7,6 +9,7 @@ using EShop.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using System.Net;
 
 namespace EShop.API.Controllers
@@ -26,29 +29,22 @@ namespace EShop.API.Controllers
             this.mediator = mediator;
         }
 
-        [HttpGet("getall")]
-        public IActionResult GetAll([FromQuery] Pagination pagination)
-        {
-            // baseurl/api/products?page=1&size=10
-            try
-            {
-                //return Ok(productReadRepository.GetAll()); // without Pagination
+		[HttpGet("getall")]
+		public async Task<IActionResult> GetAll([FromQuery] GetProductsQueryRequest request)
+		{
+			try
+			{
+				var response = await mediator.Send(request);
+				return Ok(response);
+			}
+			catch (Exception)
+			{
+				// logging
+				return StatusCode((int)HttpStatusCode.InternalServerError);
+			}
+		}
 
-                var products = productReadRepository.GetAll(tracking: false);
-                var totalCount = products.Count();
-
-                products = products.OrderBy(p => p.CreatedTime).Skip(pagination.Size * pagination.Page).Take(pagination.Size).ToList();
-
-                return Ok(new { products, totalCount });
-            }
-            catch (Exception)
-            {
-                // logging
-                return StatusCode((int)HttpStatusCode.InternalServerError);
-            }
-        }
-
-        [HttpPost("add")]
+		[HttpPost("add")]
         public async Task<IActionResult> Add([FromBody] AddProductViewModel model)
         {
             try
@@ -97,31 +93,32 @@ namespace EShop.API.Controllers
             }
         }
 
-        [HttpGet("{productId}")]
-        public async Task<IActionResult> Get(GetProductByIdCommandRequest request)
-        {
-            try
+		[HttpGet("{productId}")]
+		public async Task<IActionResult> Get(Guid productId)
+		{
+			try
+			{
+				var request = new GetProductByIdQueryRequest { Id = productId };
+				var product = await mediator.Send(request);
+
+				if (product == null)
+				{
+					return NotFound("Product not found.");
+				}
+
+				return Ok(product);
+			}
+			catch (Exception ex)
             {
-                var product = await mediator.Send(request);
+                // Log the exception
+				return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while processing the request.");
+			}
+		}
 
-                if (product == null)
-                {
-                    return NotFound();
-                }
-
-                return Ok(product);
-            }
-            catch (Exception)
-            {
-                // logging
-                return StatusCode((int)HttpStatusCode.InternalServerError);
-            }
-        }
-
-        //[HttpGet]
-        //public IActionResult GetProducts()
-        //{
-        //    return Ok();
-        //}
-    }
+		//[HttpGet]
+		//public IActionResult GetProducts()
+		//{
+		//    return Ok();
+		//}
+	}
 }
